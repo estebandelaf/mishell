@@ -831,5 +831,3 @@ function databases() {
 	$buffer .= ''."\n";
 	return $buffer;	
 }
-
-?>
